@@ -1,6 +1,7 @@
 """
 Meta Ads API 數據拉取模組
 支援分頁、精確日期範圍、Token 過期偵測。
+僅拉取 KOCSKIN 廣告帳戶。
 """
 from __future__ import annotations
 
@@ -96,12 +97,11 @@ def fetch_all_ads(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    """拉取所有廣告帳戶的數據，回傳 {帳戶名: [rows]}。"""
+    """拉取 KOCSKIN 廣告帳戶的數據，回傳 {帳戶名: [rows]}。"""
     _check_token_validity()
 
     accounts = {
         "KOCSKIN": settings.meta_ad_account_id_kocskin,
-        "小燕": settings.meta_ad_account_id_xiaoyan,
     }
 
     results: dict[str, list[dict[str, Any]]] = {}

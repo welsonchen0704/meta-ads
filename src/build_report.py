@@ -1,6 +1,7 @@
 """
 Markdown 週報產生模組
-完整輸出四個分類 + 彙總 + AI 摘要 + 粉專貼文 insights。
+完整輸出四個分類 + 彙總 + AI 摘要。
+僅含 KOCSKIN 廣告數據。
 """
 from __future__ import annotations
 
@@ -34,44 +35,13 @@ def _section_ads(title: str, emoji: str, ads: list[dict[str, Any]], max_show: in
     return "\n".join(lines)
 
 
-def _format_post_row(post: dict[str, Any]) -> str:
-    """格式化單篇粉專貼文為 Markdown（含 insights）。"""
-    message = str(post.get("message") or "").replace("\n", " ")[:80]
-    created = post.get("created_time", "")[:10]
-    link = post.get("permalink_url", "")
-
-    # 基本資訊行
-    if link:
-        line1 = f"- {created}｜[{message}]({link})"
-    else:
-        line1 = f"- {created}｜{message}"
-
-    # Insights 行
-    reach = post.get("reach", 0)
-    impressions = post.get("impressions", 0)
-    clicks = post.get("clicks", 0)
-    engaged = post.get("engaged_users", 0)
-    reactions = post.get("reactions", 0)
-    comments = post.get("comments_count", 0)
-    shares = post.get("shares_count", 0)
-
-    line2 = (
-        f"  觸及 {reach:,}｜曝光 {impressions:,}｜"
-        f"點擊 {clicks:,}｜互動 {engaged:,}｜"
-        f"按讚 {reactions:,}｜留言 {comments:,}｜分享 {shares:,}"
-    )
-
-    return f"{line1}\n{line2}"
-
-
 def build_markdown_report(
     summary: dict[str, Any],
-    page_posts: dict[str, list[dict[str, Any]]],
     ai_summary_text: str | None,
     start_date: str,
     end_date: str,
 ) -> str:
-    """產生完整的 Markdown 週報。"""
+    """產生完整的 Markdown 週報（僅廣告數據）。"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     sections = []
@@ -103,16 +73,5 @@ def build_markdown_report(
     sections.append(
         _section_ads("數據不足", "⚪", summary["insufficient_data"], max_show=3)
     )
-
-    # ── 粉專貼文（含 insights）──
-    sections.append("\n## 粉專近期貼文\n")
-    for source_name, posts in page_posts.items():
-        sections.append(f"### {source_name}\n")
-        if not posts:
-            sections.append("無資料\n")
-            continue
-        for post in posts[:5]:
-            sections.append(_format_post_row(post))
-        sections.append("")
 
     return "\n".join(sections)

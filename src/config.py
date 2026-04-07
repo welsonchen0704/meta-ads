@@ -20,14 +20,9 @@ def _env(key: str, default: str = "") -> str:
 
 @dataclass(frozen=True)
 class Settings:
-    # ── Meta Ads ──
+    # ── Meta Ads（僅 KOCSKIN）──
     meta_user_access_token: str = field(default_factory=lambda: _env("META_USER_ACCESS_TOKEN"))
     meta_ad_account_id_kocskin: str = field(default_factory=lambda: _env("META_AD_ACCOUNT_ID_KOCSKIN"))
-    meta_ad_account_id_xiaoyan: str = field(default_factory=lambda: _env("META_AD_ACCOUNT_ID_XIAOYAN"))
-
-    # ── Meta Pages（Page ID 仍需設定，Page Access Token 改為動態取得）──
-    meta_page_id_kocskin: str = field(default_factory=lambda: _env("META_PAGE_ID_KOCSKIN"))
-    meta_page_id_camping: str = field(default_factory=lambda: _env("META_PAGE_ID_CAMPING"))
 
     # ── Notion ──
     notion_api_token: str = field(default_factory=lambda: _env("NOTION_API_TOKEN"))
@@ -58,9 +53,6 @@ class Settings:
         required = {
             "META_USER_ACCESS_TOKEN": self.meta_user_access_token,
             "META_AD_ACCOUNT_ID_KOCSKIN": self.meta_ad_account_id_kocskin,
-            "META_AD_ACCOUNT_ID_XIAOYAN": self.meta_ad_account_id_xiaoyan,
-            "META_PAGE_ID_KOCSKIN": self.meta_page_id_kocskin,
-            "META_PAGE_ID_CAMPING": self.meta_page_id_camping,
             "NOTION_API_TOKEN": self.notion_api_token,
             "NOTION_DATABASE_ID_WEEKLY_REPORT": self.notion_database_id_weekly_report,
             "TELEGRAM_BOT_TOKEN": self.telegram_bot_token,

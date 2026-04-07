@@ -103,38 +103,12 @@ def _markdown_to_blocks(markdown: str) -> list[dict[str, Any]]:
     return blocks[:100]
 
 
-def _build_page_posts_summary(page_posts: dict[str, list[dict[str, Any]]]) -> str:
-    """產生粉專 Top 貼文摘要文字（含 insights 數據）。"""
-    lines = []
-    for source_name, posts in page_posts.items():
-        if not posts:
-            continue
-        lines.append(f"【{source_name}】")
-        for post in posts[:5]:
-            message = str(post.get("message") or "").replace("\n", " ")[:40]
-            created = post.get("created_time", "")[:10]
-            reach = post.get("post_impressions_unique", 0)
-            impressions = post.get("post_impressions", 0)
-            clicks = post.get("post_clicks", 0)
-            engaged = post.get("post_engaged_users", 0)
-            likes = post.get("likes_count", 0)
-            comments = post.get("comments_count", 0)
-            shares = post.get("shares_count", 0)
-            lines.append(f"  {created}｜{message}")
-            lines.append(
-                f"    觸及 {reach:,}｜曝光 {impressions:,}｜點擊 {clicks:,}｜"
-                f"互動 {engaged:,}｜讚 {likes:,}｜留言 {comments:,}｜分享 {shares:,}"
-            )
-    return "\n".join(lines) if lines else "本週無粉專貼文資料"
-
-
 def create_weekly_report_page(
     title: str,
     markdown_report: str,
     summary: dict[str, Any],
     start_date: str,
     end_date: str,
-    page_posts: dict[str, list[dict[str, Any]]] | None = None,
     ai_summary_text: str | None = None,
     error_note: str = "",
 ) -> str:
@@ -158,10 +132,6 @@ def create_weekly_report_page(
         )
     short_summary = "\n".join(short_summary_parts)
 
-    posts_summary = ""
-    if page_posts:
-        posts_summary = _build_page_posts_summary(page_posts)
-
     properties: dict[str, Any] = {
         "週報標題": {"title": [{"text": {"content": title}}]},
         "週次": {"rich_text": [{"text": {"content": now.strftime("%Y-W%W")}}]},
@@ -178,11 +148,6 @@ def create_weekly_report_page(
         "高效廣告數": {"number": len(summary["scale_candidates"])},
         "低效廣告數": {"number": len(summary["pause_candidates"])},
     }
-
-    if posts_summary:
-        properties["粉專Top貼文摘要"] = {
-            "rich_text": [{"text": {"content": posts_summary[:2000]}}]
-        }
 
     if error_note:
         properties["錯誤備註"] = {

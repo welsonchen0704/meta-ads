@@ -1,5 +1,6 @@
 """
 Meta 廣告週報自動產生器 — 主流程
+僅拉取 KOCSKIN 廣告數據，不含粉專貼文。
 每週一自動執行，或手動觸發。
 """
 from __future__ import annotations
@@ -15,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import settings
 from fetch_ads import fetch_all_ads, MetaTokenError
-from fetch_pages import fetch_all_pages
 from analyze_ads import analyze_account, compute_summary
 from ai_summary import generate_ai_summary
 from build_report import build_markdown_report
@@ -58,10 +58,8 @@ def main() -> None:
         # 4. 分析與分類
         logger.info("── 分析廣告數據 ──")
         all_analyzed: list[dict] = []
-        analyzed_by_account: dict[str, list[dict]] = {}
         for account_name, rows in raw_ads.items():
             analyzed = analyze_account(rows, account_name)
-            analyzed_by_account[account_name] = analyzed
             all_analyzed.extend(analyzed)
 
         summary = compute_summary(all_analyzed)
@@ -71,38 +69,32 @@ def main() -> None:
             f"ROAS {summary['weighted_roas']:.2f}"
         )
 
-        # 5. 拉取粉專貼文
-        logger.info("── 拉取粉專貼文 ──")
-        page_posts = fetch_all_pages()
-
-        # 6. AI 決策摘要（失敗不阻斷）
+        # 5. AI 決策摘要（失敗不阻斷）
         logger.info("── 產生 AI 摘要 ──")
         ai_text = generate_ai_summary(summary, start_date, end_date)
 
-        # 7. 產生 Markdown 報告
+        # 6. 產生 Markdown 報告
         logger.info("── 產生報告 ──")
         markdown_report = build_markdown_report(
-            summary, page_posts, ai_text, start_date, end_date
+            summary, ai_text, start_date, end_date
         )
 
-        # 8. 寫入 Notion
+        # 7. 寫入 Notion
         logger.info("── 寫入 Notion ──")
         title = f"Meta 廣告週報 {end_date}"
         notion_url = create_weekly_report_page(
             title, markdown_report, summary, start_date, end_date,
-            page_posts=page_posts,
             ai_summary_text=ai_text,
         )
 
-        # 9. 產生 PDF
+        # 8. 產生 PDF
         logger.info("── 產生 PDF ──")
         pdf_path = generate_pdf_report(
             summary, ai_text, start_date, end_date,
             output_path=f"weekly_report_{end_date}.pdf",
-            page_posts=page_posts,
         )
 
-        # 10. 發送 Telegram 通知
+        # 9. 發送 Telegram 通知
         logger.info("── 發送 Telegram 通知 ──")
         send_report_notification(title, summary, notion_url, ai_text)
 
