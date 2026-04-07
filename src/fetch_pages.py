@@ -2,6 +2,8 @@
 Meta Page API 粉專貼文拉取模組
 動態從 /me/accounts 取得 Page Access Token，不需額外設定。
 含貼文 insights（觸及、互動、點擊等）。
+
+Note: 2025/11 起 Meta 廢棄 post_impressions 系列，改用 post_media_view。
 """
 from __future__ import annotations
 
@@ -14,18 +16,6 @@ from utils import http_get, safe_int
 logger = logging.getLogger("meta_weekly_report")
 
 META_BASE = f"https://graph.facebook.com/{settings.meta_api_version}"
-
-# v21.0 仍支援的貼文 insights 指標（分批嘗試以避免整批失敗）
-PRIMARY_METRICS = [
-    "post_impressions",              # 曝光次數
-    "post_impressions_unique",       # 觸及人數
-    "post_clicks",                   # 貼文點擊次數
-]
-
-SECONDARY_METRICS = [
-    "post_engaged_users",            # 互動人數
-    "post_reactions_by_type_total",  # 各類型反應
-]
 
 
 def _get_page_access_tokens() -> dict[str, str]:
@@ -59,47 +49,45 @@ def _fetch_post_insights(
     post_id: str,
     page_access_token: str,
 ) -> dict[str, Any]:
-    """拉取單篇貼文的 insights 指標。先嘗試主要指標，再嘗試次要指標。"""
+    """
+    拉取單篇貼文的 insights 指標。
+    2025/11 起 post_impressions 已廢棄，改用 post_media_view。
+    逐一嘗試不同指標，任一失敗不影響其他。
+    """
     result: dict[str, Any] = {}
     url = f"{META_BASE}/{post_id}/insights"
 
-    # 主要指標
-    params = {
-        "access_token": page_access_token,
-        "metric": ",".join(PRIMARY_METRICS),
-        "period": "lifetime",
-    }
-    try:
-        payload = http_get(url, params)
-        for item in payload.get("data", []):
-            name = item.get("name", "")
-            values = item.get("values", [])
-            if values:
-                result[name] = safe_int(values[0].get("value", 0))
-    except Exception as e:
-        logger.warning(f"拉取貼文 {post_id} 主要 insights 失敗: {e}")
+    # 逐一嘗試各指標（避免一個壞掉整批失敗）
+    metrics_to_try = [
+        ("post_media_view", "lifetime"),          # 觀看數（取代 impressions）
+        ("post_clicks", "lifetime"),              # 點擊數
+        ("post_engaged_users", "lifetime"),       # 互動人數
+        ("post_reactions_by_type_total", "lifetime"),  # 各類反應
+    ]
 
-    # 次要指標（單獨嘗試，失敗不影響主要指標）
-    params_secondary = {
-        "access_token": page_access_token,
-        "metric": ",".join(SECONDARY_METRICS),
-        "period": "lifetime",
-    }
-    try:
-        payload = http_get(url, params_secondary)
-        for item in payload.get("data", []):
-            name = item.get("name", "")
-            values = item.get("values", [])
-            if values:
-                val = values[0].get("value", 0)
-                if isinstance(val, dict):
-                    # post_reactions_by_type_total 回傳 {"like": N, "love": M, ...}
-                    result[name] = val
-                    result["total_reactions"] = sum(val.values())
-                else:
-                    result[name] = safe_int(val)
-    except Exception as e:
-        logger.debug(f"拉取貼文 {post_id} 次要 insights 失敗（可忽略）: {e}")
+    for metric_name, period in metrics_to_try:
+        params = {
+            "access_token": page_access_token,
+            "metric": metric_name,
+            "period": period,
+        }
+        try:
+            payload = http_get(url, params)
+            for item in payload.get("data", []):
+                name = item.get("name", "")
+                values = item.get("values", [])
+                if values:
+                    val = values[0].get("value", 0)
+                    if isinstance(val, dict):
+                        result[name] = val
+                        result["total_reactions"] = sum(val.values())
+                    else:
+                        result[name] = safe_int(val)
+        except Exception:
+            pass  # 靜默跳過，避免洗 log
+
+    if result:
+        logger.info(f"貼文 {post_id} insights: {list(result.keys())}")
 
     return result
 
@@ -127,16 +115,17 @@ def fetch_page_posts(
         if not post_id:
             continue
 
-        # 從 insights API 取詳細指標
         insights = _fetch_post_insights(post_id, page_access_token)
-        post["post_impressions"] = insights.get("post_impressions", 0)
-        post["post_impressions_unique"] = insights.get("post_impressions_unique", 0)
+
+        # 映射到報告欄位（相容原有格式）
+        views = insights.get("post_media_view", 0)
+        post["post_impressions"] = views          # 用 views 取代 impressions
+        post["post_impressions_unique"] = views   # 無獨立觸及，用 views 代替
         post["post_engaged_users"] = insights.get("post_engaged_users", 0)
         post["post_clicks"] = insights.get("post_clicks", 0)
         post["post_reactions_like_total"] = insights.get("total_reactions", 0)
         post["post_activity"] = insights.get("post_engaged_users", 0)
 
-        # 用 insights 數據填入顯示欄位
         post["likes_count"] = insights.get("total_reactions", 0)
         post["comments_count"] = 0
         post["shares_count"] = 0
