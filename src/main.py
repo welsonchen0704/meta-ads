@@ -1,6 +1,6 @@
 """
 Meta 廣告週報自動產生器 — 主流程
-僅拉取 KOCSKIN 廣告數據，不含粉專貼文。
+僅拉取 KOCSKIN 廣告數據，輸出至 Notion + Telegram。
 每週一自動執行，或手動觸發。
 """
 from __future__ import annotations
@@ -25,7 +25,6 @@ from send_telegram import (
     send_error_notification,
     send_token_expiry_warning,
 )
-from generate_pdf import generate_pdf_report
 from utils import get_last_week_range
 
 # ── Logging 設定 ──
@@ -87,14 +86,7 @@ def main() -> None:
             ai_summary_text=ai_text,
         )
 
-        # 8. 產生 PDF
-        logger.info("── 產生 PDF ──")
-        pdf_path = generate_pdf_report(
-            summary, ai_text, start_date, end_date,
-            output_path=f"weekly_report_{end_date}.pdf",
-        )
-
-        # 9. 發送 Telegram 通知
+        # 8. 發送 Telegram 通知
         logger.info("── 發送 Telegram 通知 ──")
         send_report_notification(title, summary, notion_url, ai_text)
 
@@ -102,7 +94,6 @@ def main() -> None:
         logger.info("=" * 60)
         logger.info("週報產生完成！")
         logger.info(f"Notion: {notion_url}")
-        logger.info(f"PDF: {pdf_path}")
         logger.info("=" * 60)
 
         # 輸出報告到 stdout（方便 GitHub Actions 查看）
