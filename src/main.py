@@ -25,7 +25,7 @@ from send_telegram import (
     send_error_notification,
     send_token_expiry_warning,
 )
-from utils import get_last_week_range
+from utils import get_last_week_range, get_week_label
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +33,65 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("meta_weekly_report")
+
+
+def _build_report_data(summary: dict, ai_text: str, start_date: str, end_date: str, notion_url: str) -> dict:
+    """
+    將 compute_summary 回傳的 summary 轉換為 build_report_html 所需的 report_data 格式。
+    compute_summary 實際 key：
+      total_spend, total_purchases, total_purchase_value, weighted_roas,
+      scale_candidates, pause_candidates, watch_list, insufficient_data, total_ads
+    """
+    all_ads = (
+        summary.get("scale_candidates", [])
+        + summary.get("pause_candidates", [])
+        + summary.get("watch_list", [])
+        + summary.get("insufficient_data", [])
+    )
+
+    # avg_cpa：有購買的廣告取平均
+    ads_with_purchase = [a for a in all_ads if a.get("purchases", 0) > 0]
+    avg_cpa = (
+        sum(a.get("cpa", 0) for a in ads_with_purchase) / len(ads_with_purchase)
+        if ads_with_purchase else 0
+    )
+
+    # overall_ctr
+    total_impressions = sum(a.get("impressions", 0) for a in all_ads)
+    total_clicks = sum(a.get("clicks", 0) for a in all_ads)
+    overall_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
+
+    # top10 花費最高廣告（用於分佈圖）
+    top10 = sorted(all_ads, key=lambda x: x.get("spend", 0), reverse=True)[:10]
+
+    # build_report_html 的欄位名稱是 purchase_roas，normalize_ad_row 輸出的是 roas
+    # 在這裡統一補上 purchase_roas alias
+    def add_roas_alias(ads):
+        for a in ads:
+            if "purchase_roas" not in a:
+                a["purchase_roas"] = a.get("roas", 0)
+        return ads
+
+    return {
+        "week_label":       get_week_label(end_date),
+        "date_start":       start_date,
+        "date_end":         end_date,
+        "generated_at":     datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "total_spend":      summary["total_spend"],
+        "total_purchases":  summary["total_purchases"],
+        "total_revenue":    summary["total_purchase_value"],   # 正確 key
+        "overall_roas":     summary["weighted_roas"],           # 正確 key
+        "avg_cpa":          round(avg_cpa, 0),
+        "ad_count":         summary["total_ads"],               # 正確 key
+        "overall_ctr":      round(overall_ctr, 2),
+        "ai_summary":       ai_text,
+        "boost_ads":        add_roas_alias(summary.get("scale_candidates", [])),   # 正確 key
+        "stop_ads":         add_roas_alias(summary.get("pause_candidates", [])),   # 正確 key
+        "watch_ads":        add_roas_alias(summary.get("watch_list", [])),         # 正確 key
+        "insufficient_ads": add_roas_alias(summary.get("insufficient_data", [])), # 正確 key
+        "top10_spend_ads":  add_roas_alias(top10),
+        "notion_url":       notion_url,
+    }
 
 
 def main() -> None:
@@ -85,29 +144,9 @@ def main() -> None:
             ai_summary_text=ai_text,
         )
 
-        # 8. 產生 HTML 視覺儀表板（含 Token 到期提醒 + 週對週比較）
+        # 8. 產生 HTML 視覺儀表板
         logger.info("── 產生 HTML 儀表板 ──")
-        from utils import get_week_label
-        report_data = {
-            "week_label":        get_week_label(end_date),
-            "date_start":        start_date,
-            "date_end":          end_date,
-            "generated_at":      datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "total_spend":       summary["total_spend"],
-            "total_purchases":   summary["total_purchases"],
-            "total_revenue":     summary["total_revenue"],
-            "overall_roas":      summary["weighted_roas"],
-            "avg_cpa":           summary.get("avg_cpa", 0),
-            "ad_count":          summary.get("ad_count", 0),
-            "overall_ctr":       summary.get("overall_ctr", 0),
-            "ai_summary":        ai_text,
-            "boost_ads":         summary.get("boost_ads", []),
-            "stop_ads":          summary.get("stop_ads", []),
-            "watch_ads":         summary.get("watch_ads", []),
-            "insufficient_ads":  summary.get("insufficient_ads", []),
-            "top10_spend_ads":   summary.get("top10_spend_ads", []),
-            "notion_url":        notion_url,
-        }
+        report_data = _build_report_data(summary, ai_text, start_date, end_date, notion_url)
         html_path = build_html(report_data)
         logger.info(f"HTML 儀表板：{html_path}")
 
