@@ -4,7 +4,7 @@ build_report_html.py
 同時包含：
 - Token 到期自動提醒（剩 7 天 Telegram 警告）
 - 週對週比較（從 Notion 撈上週數據）
-輸出：output/weekly_report_YYYY-MM-DD.html
+輸出：output/weekly_report_YYYY-MM-DD.html + output/index.html（固定連結）
 """
 
 import os
@@ -63,10 +63,6 @@ def safe(text, max_len=60):
 # ─── Token 到期提醒 ────────────────────────────────────────────────────────
 
 def check_token_expiry(token_expiry_str: str) -> tuple:
-    """
-    回傳 (HTML片段, 剩餘天數)。
-    token_expiry_str 格式：'YYYY-MM-DD'，從 GitHub Secret META_TOKEN_EXPIRY 讀取。
-    """
     try:
         expiry = datetime.strptime(token_expiry_str, "%Y-%m-%d").date()
         days_left = (expiry - date.today()).days
@@ -106,10 +102,6 @@ def send_token_warning_telegram(days_left: int, bot_token: str, chat_id: str):
 # ─── 週對週比較 ────────────────────────────────────────────────────────────
 
 def fetch_last_week_roas(notion_token: str, db_id: str, current_week_label: str):
-    """
-    從 Notion 週報資料庫撈上一週的 整體ROAS。
-    回傳 float 或 None。
-    """
     try:
         import requests
         year, week = map(int, current_week_label.split("-W"))
@@ -222,9 +214,11 @@ def dist_row_html(ad: dict, max_spend: float) -> str:
 def build_html_report(report_data: dict, output_dir: str = "output") -> str:
     """
     從 report_data 產生 HTML 儀表板。
-    模板路徑：templates/weekly_report.html（相對於 repo root）
+    同時輸出：
+    - weekly_report_YYYY-MM-DD.html（有日期的版本，保留歷史）
+    - index.html（固定連結，永遠指向最新週報）
     """
-    # 找模板（兼容本地和 GitHub Actions 路徑）
+    # 找模板
     script_dir = Path(__file__).parent
     template_candidates = [
         script_dir.parent / "templates" / "weekly_report.html",
@@ -240,7 +234,7 @@ def build_html_report(report_data: dict, output_dir: str = "output") -> str:
     token_warn_html, days_left = check_token_expiry(token_expiry)
 
     # 週對週 ROAS
-    notion_token = os.environ.get("NOTION_TOKEN", "")
+    notion_token = os.environ.get("NOTION_API_TOKEN", os.environ.get("NOTION_TOKEN", ""))
     notion_db_id = os.environ.get("NOTION_DATABASE_ID_WEEKLY_REPORT", "9d880886-1364-4075-a0b5-f13b4ca46504")
     last_roas = fetch_last_week_roas(notion_token, notion_db_id, report_data["week_label"])
     current_roas = report_data.get("overall_roas", 0)
@@ -305,10 +299,18 @@ def build_html_report(report_data: dict, output_dir: str = "output") -> str:
     )
 
     Path(output_dir).mkdir(exist_ok=True)
+
+    # 寫出有日期的版本
     filename = f"weekly_report_{report_data.get('date_end', 'unknown')}.html"
     out_path = Path(output_dir) / filename
     out_path.write_text(result, encoding="utf-8")
     print(f"[HTML] 報告已產生：{out_path}")
+
+    # 同時寫出 index.html（固定連結，永遠是最新週報）
+    index_path = Path(output_dir) / "index.html"
+    index_path.write_text(result, encoding="utf-8")
+    print(f"[HTML] index.html 已更新 → https://welsonchen0704.github.io/meta-ads/")
+
     return str(out_path)
 
 
