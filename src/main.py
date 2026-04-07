@@ -99,6 +99,7 @@ def main() -> None:
         pdf_path = generate_pdf_report(
             summary, ai_text, start_date, end_date,
             output_path=f"weekly_report_{end_date}.pdf",
+            page_posts=page_posts,
         )
 
         # 10. 發送 Telegram 通知
