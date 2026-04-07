@@ -1,5 +1,6 @@
 """
 Meta Page API 粉專貼文拉取模組
+動態從 /me/accounts 取得 Page Access Token，不需額外設定。
 含貼文 insights（觸及、互動、點擊等）。
 """
 from __future__ import annotations
@@ -23,6 +24,33 @@ POST_INSIGHT_METRICS = [
     "post_reactions_like_total",     # 按讚數
     "post_activity",                 # 所有互動（留言+分享+點擊）
 ]
+
+
+def _get_page_access_tokens() -> dict[str, str]:
+    """
+    用 User Access Token 從 /me/accounts 動態取得所有粉專的 Page Access Token。
+    回傳 {page_id: page_access_token}。
+    """
+    url = f"{META_BASE}/me/accounts"
+    params = {
+        "access_token": settings.meta_user_access_token,
+        "fields": "id,name,access_token",
+        "limit": 100,
+    }
+    try:
+        payload = http_get(url, params)
+        tokens = {}
+        for page in payload.get("data", []):
+            page_id = page.get("id", "")
+            token = page.get("access_token", "")
+            name = page.get("name", "")
+            if page_id and token:
+                tokens[page_id] = token
+                logger.info(f"取得粉專 Token: {name} ({page_id})")
+        return tokens
+    except Exception as e:
+        logger.error(f"取得 Page Access Token 失敗: {e}")
+        return {}
 
 
 def _fetch_post_insights(
@@ -83,21 +111,33 @@ def fetch_page_posts(
 
         # 用 insights 數據填入顯示欄位
         post["likes_count"] = insights.get("post_reactions_like_total", 0)
-        post["comments_count"] = 0  # insights 無單獨留言數，用 activity 替代
+        post["comments_count"] = 0  # insights 無單獨留言數
         post["shares_count"] = 0    # insights 無單獨分享數
 
     return posts
 
 
 def fetch_all_pages() -> dict[str, list[dict[str, Any]]]:
-    """拉取所有粉專的貼文。"""
+    """拉取所有粉專的貼文。動態取得 Page Access Token。"""
+    # 動態取得所有 Page Access Token
+    page_tokens = _get_page_access_tokens()
+    if not page_tokens:
+        logger.warning("無法取得任何粉專的 Page Access Token")
+        return {}
+
     pages = {
-        "KOCSKIN": (settings.meta_page_id_kocskin, settings.meta_page_access_token_kocskin),
-        "露營瘋": (settings.meta_page_id_camping, settings.meta_page_access_token_camping),
+        "KOCSKIN": settings.meta_page_id_kocskin,
+        "露營瘋": settings.meta_page_id_camping,
     }
 
     results: dict[str, list[dict[str, Any]]] = {}
-    for name, (page_id, token) in pages.items():
+    for name, page_id in pages.items():
+        token = page_tokens.get(page_id, "")
+        if not token:
+            logger.warning(f"找不到 {name} ({page_id}) 的 Page Access Token，跳過")
+            results[name] = []
+            continue
+
         logger.info(f"拉取 {name} 粉專貼文...")
         try:
             results[name] = fetch_page_posts(page_id, token)
