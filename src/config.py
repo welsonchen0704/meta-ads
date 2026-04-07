@@ -25,11 +25,9 @@ class Settings:
     meta_ad_account_id_kocskin: str = field(default_factory=lambda: _env("META_AD_ACCOUNT_ID_KOCSKIN"))
     meta_ad_account_id_xiaoyan: str = field(default_factory=lambda: _env("META_AD_ACCOUNT_ID_XIAOYAN"))
 
-    # ── Meta Pages ──
+    # ── Meta Pages（Page ID 仍需設定，Page Access Token 改為動態取得）──
     meta_page_id_kocskin: str = field(default_factory=lambda: _env("META_PAGE_ID_KOCSKIN"))
     meta_page_id_camping: str = field(default_factory=lambda: _env("META_PAGE_ID_CAMPING"))
-    meta_page_access_token_kocskin: str = field(default_factory=lambda: _env("META_PAGE_ACCESS_TOKEN_KOCSKIN"))
-    meta_page_access_token_camping: str = field(default_factory=lambda: _env("META_PAGE_ACCESS_TOKEN_CAMPING"))
 
     # ── Notion ──
     notion_api_token: str = field(default_factory=lambda: _env("NOTION_API_TOKEN"))
@@ -63,8 +61,6 @@ class Settings:
             "META_AD_ACCOUNT_ID_XIAOYAN": self.meta_ad_account_id_xiaoyan,
             "META_PAGE_ID_KOCSKIN": self.meta_page_id_kocskin,
             "META_PAGE_ID_CAMPING": self.meta_page_id_camping,
-            "META_PAGE_ACCESS_TOKEN_KOCSKIN": self.meta_page_access_token_kocskin,
-            "META_PAGE_ACCESS_TOKEN_CAMPING": self.meta_page_access_token_camping,
             "NOTION_API_TOKEN": self.notion_api_token,
             "NOTION_DATABASE_ID_WEEKLY_REPORT": self.notion_database_id_weekly_report,
             "TELEGRAM_BOT_TOKEN": self.telegram_bot_token,
