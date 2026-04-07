@@ -15,14 +15,16 @@ logger = logging.getLogger("meta_weekly_report")
 
 META_BASE = f"https://graph.facebook.com/{settings.meta_api_version}"
 
-# 要拉取的貼文 insights 指標
-POST_INSIGHT_METRICS = [
+# v21.0 仍支援的貼文 insights 指標（分批嘗試以避免整批失敗）
+PRIMARY_METRICS = [
     "post_impressions",              # 曝光次數
     "post_impressions_unique",       # 觸及人數
-    "post_engaged_users",            # 互動人數
     "post_clicks",                   # 貼文點擊次數
-    "post_reactions_like_total",     # 按讚數
-    "post_activity",                 # 所有互動（留言+分享+點擊）
+]
+
+SECONDARY_METRICS = [
+    "post_engaged_users",            # 互動人數
+    "post_reactions_by_type_total",  # 各類型反應（取代 post_reactions_like_total）
 ]
 
 
@@ -56,25 +58,48 @@ def _get_page_access_tokens() -> dict[str, str]:
 def _fetch_post_insights(
     post_id: str,
     page_access_token: str,
-) -> dict[str, int]:
-    """拉取單篇貼文的 insights 指標。"""
+) -> dict[str, Any]:
+    """拉取單篇貼文的 insights 指標。先嘗試主要指標，再嘗試次要指標。"""
+    result: dict[str, Any] = {}
+
+    # 主要指標
     url = f"{META_BASE}/{post_id}/insights"
     params = {
         "access_token": page_access_token,
-        "metric": ",".join(POST_INSIGHT_METRICS),
+        "metric": ",".join(PRIMARY_METRICS),
     }
     try:
         payload = http_get(url, params)
-        result: dict[str, int] = {}
         for item in payload.get("data", []):
             name = item.get("name", "")
             values = item.get("values", [])
             if values:
                 result[name] = safe_int(values[0].get("value", 0))
-        return result
     except Exception as e:
-        logger.warning(f"拉取貼文 {post_id} insights 失敗: {e}")
-        return {}
+        logger.warning(f"拉取貼文 {post_id} 主要 insights 失敗: {e}")
+
+    # 次要指標（單獨嘗試，失敗不影響主要指標）
+    params_secondary = {
+        "access_token": page_access_token,
+        "metric": ",".join(SECONDARY_METRICS),
+    }
+    try:
+        payload = http_get(url, params_secondary)
+        for item in payload.get("data", []):
+            name = item.get("name", "")
+            values = item.get("values", [])
+            if values:
+                val = values[0].get("value", 0)
+                if isinstance(val, dict):
+                    # post_reactions_by_type_total 回傳 {"like": N, "love": M, ...}
+                    result[name] = val
+                    result["total_reactions"] = sum(val.values())
+                else:
+                    result[name] = safe_int(val)
+    except Exception as e:
+        logger.debug(f"拉取貼文 {post_id} 次要 insights 失敗（可忽略）: {e}")
+
+    return result
 
 
 def fetch_page_posts(
@@ -106,13 +131,13 @@ def fetch_page_posts(
         post["post_impressions_unique"] = insights.get("post_impressions_unique", 0)
         post["post_engaged_users"] = insights.get("post_engaged_users", 0)
         post["post_clicks"] = insights.get("post_clicks", 0)
-        post["post_reactions_like_total"] = insights.get("post_reactions_like_total", 0)
-        post["post_activity"] = insights.get("post_activity", 0)
+        post["post_reactions_like_total"] = insights.get("total_reactions", 0)
+        post["post_activity"] = insights.get("post_engaged_users", 0)
 
         # 用 insights 數據填入顯示欄位
-        post["likes_count"] = insights.get("post_reactions_like_total", 0)
-        post["comments_count"] = 0  # insights 無單獨留言數
-        post["shares_count"] = 0    # insights 無單獨分享數
+        post["likes_count"] = insights.get("total_reactions", 0)
+        post["comments_count"] = 0
+        post["shares_count"] = 0
 
     return posts
 
