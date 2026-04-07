@@ -25,10 +25,10 @@ jobs:
 
       - name: Run weekly report
         env:
-          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_USER_ACCESS_TOKEN: ${{ secrets.META_USER_ACCESS_TOKEN }}
           META_TOKEN_EXPIRY: ${{ secrets.META_TOKEN_EXPIRY }}
           META_AD_ACCOUNT_ID_KOCSKIN: ${{ secrets.META_AD_ACCOUNT_ID_KOCSKIN }}
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
           NOTION_DATABASE_ID_WEEKLY_REPORT: ${{ secrets.NOTION_DATABASE_ID_WEEKLY_REPORT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
