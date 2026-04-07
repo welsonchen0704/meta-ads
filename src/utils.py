@@ -41,6 +41,18 @@ def get_last_week_range() -> tuple[str, str]:
     return last_monday.isoformat(), last_sunday.isoformat()
 
 
+def get_week_label(date_str: str) -> str:
+    """
+    將日期字串（YYYY-MM-DD）轉換為 ISO week label（例如 '2026-W14'）。
+    用於 HTML 週報標題與 Notion 週次欄位對照。
+    """
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d").date()
+        return d.strftime("%G-W%V")
+    except Exception:
+        return date_str
+
+
 def safe_float(value: Any, default: float = 0.0) -> float:
     """安全轉換為 float。"""
     if value is None:
