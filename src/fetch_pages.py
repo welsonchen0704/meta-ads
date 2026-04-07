@@ -55,12 +55,7 @@ def fetch_page_posts(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """拉取粉專最近的貼文，並附加 insights 數據。"""
-    fields = [
-        "id", "message", "created_time", "permalink_url",
-        "shares",
-        "likes.summary(true)",
-        "comments.summary(true)",
-    ]
+    fields = ["id", "message", "created_time", "permalink_url"]
     url = f"{META_BASE}/{page_id}/posts"
     params = {
         "access_token": page_access_token,
@@ -77,23 +72,19 @@ def fetch_page_posts(
         if not post_id:
             continue
 
-        # 從 post 本身取 likes/comments/shares
-        likes_data = post.get("likes", {}).get("summary", {})
-        comments_data = post.get("comments", {}).get("summary", {})
-        shares_data = post.get("shares", {})
-
-        post["likes_count"] = safe_int(likes_data.get("total_count", 0))
-        post["comments_count"] = safe_int(comments_data.get("total_count", 0))
-        post["shares_count"] = safe_int(shares_data.get("count", 0))
-
         # 從 insights API 取詳細指標
         insights = _fetch_post_insights(post_id, page_access_token)
-        post["impressions"] = insights.get("post_impressions", 0)
-        post["reach"] = insights.get("post_impressions_unique", 0)
-        post["engaged_users"] = insights.get("post_engaged_users", 0)
-        post["clicks"] = insights.get("post_clicks", 0)
-        post["reactions"] = insights.get("post_reactions_like_total", 0)
-        post["activity"] = insights.get("post_activity", 0)
+        post["post_impressions"] = insights.get("post_impressions", 0)
+        post["post_impressions_unique"] = insights.get("post_impressions_unique", 0)
+        post["post_engaged_users"] = insights.get("post_engaged_users", 0)
+        post["post_clicks"] = insights.get("post_clicks", 0)
+        post["post_reactions_like_total"] = insights.get("post_reactions_like_total", 0)
+        post["post_activity"] = insights.get("post_activity", 0)
+
+        # 用 insights 數據填入顯示欄位
+        post["likes_count"] = insights.get("post_reactions_like_total", 0)
+        post["comments_count"] = 0  # insights 無單獨留言數，用 activity 替代
+        post["shares_count"] = 0    # insights 無單獨分享數
 
     return posts
 
