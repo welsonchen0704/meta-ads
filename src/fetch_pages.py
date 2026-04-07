@@ -24,7 +24,7 @@ PRIMARY_METRICS = [
 
 SECONDARY_METRICS = [
     "post_engaged_users",            # 互動人數
-    "post_reactions_by_type_total",  # 各類型反應（取代 post_reactions_like_total）
+    "post_reactions_by_type_total",  # 各類型反應
 ]
 
 
@@ -61,12 +61,13 @@ def _fetch_post_insights(
 ) -> dict[str, Any]:
     """拉取單篇貼文的 insights 指標。先嘗試主要指標，再嘗試次要指標。"""
     result: dict[str, Any] = {}
+    url = f"{META_BASE}/{post_id}/insights"
 
     # 主要指標
-    url = f"{META_BASE}/{post_id}/insights"
     params = {
         "access_token": page_access_token,
         "metric": ",".join(PRIMARY_METRICS),
+        "period": "lifetime",
     }
     try:
         payload = http_get(url, params)
@@ -82,6 +83,7 @@ def _fetch_post_insights(
     params_secondary = {
         "access_token": page_access_token,
         "metric": ",".join(SECONDARY_METRICS),
+        "period": "lifetime",
     }
     try:
         payload = http_get(url, params_secondary)
@@ -144,7 +146,6 @@ def fetch_page_posts(
 
 def fetch_all_pages() -> dict[str, list[dict[str, Any]]]:
     """拉取所有粉專的貼文。動態取得 Page Access Token。"""
-    # 動態取得所有 Page Access Token
     page_tokens = _get_page_access_tokens()
     if not page_tokens:
         logger.warning("無法取得任何粉專的 Page Access Token")
