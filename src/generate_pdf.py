@@ -79,6 +79,14 @@ def _styles() -> dict[str, ParagraphStyle]:
             leading=10,
             textColor=colors.grey,
         ),
+        "tiny": ParagraphStyle(
+            "CustomTiny",
+            parent=base["Normal"],
+            fontName=_CJK_FONT,
+            fontSize=7,
+            leading=9,
+            textColor=colors.grey,
+        ),
     }
 
 
@@ -117,15 +125,20 @@ def _ads_table(
     styles: dict,
     max_rows: int = 10,
 ) -> Table | None:
-    """產生廣告明細表格。"""
+    """產生廣告明細表格（含曝光/觸及/點擊/CTR/CPM）。"""
     if not ads:
         return None
 
-    header = ["廣告名稱", "帳戶", "花費", "購買", "ROAS", "CPA", "判定"]
+    header = [
+        "廣告名稱", "帳戶", "花費", "購買", "ROAS", "CPA",
+        "曝光", "觸及", "點擊", "CTR%", "CPM", "判定",
+    ]
     data = [header]
 
     for ad in ads[:max_rows]:
-        ad_name = ad["ad_name"][:25] + "..." if len(ad["ad_name"]) > 25 else ad["ad_name"]
+        ad_name = ad["ad_name"][:20] + "..." if len(ad["ad_name"]) > 20 else ad["ad_name"]
+        ctr = ad.get("ctr", 0)
+        cpm = ad.get("cpm", 0)
         data.append([
             ad_name,
             ad.get("account", ""),
@@ -133,25 +146,43 @@ def _ads_table(
             f"{ad['purchases']:.0f}",
             f"{ad['roas']:.2f}",
             f"{ad['cpa']:.0f}",
+            f"{ad.get('impressions', 0):,}",
+            f"{ad.get('reach', 0):,}",
+            f"{ad.get('clicks', 0):,}",
+            f"{ctr:.2f}",
+            f"{cpm:.1f}",
             ad["decision"],
         ])
 
     wrapped = []
     for row in data:
-        wrapped.append([Paragraph(str(cell), styles["small"]) for cell in row])
+        wrapped.append([Paragraph(str(cell), styles["tiny"]) for cell in row])
 
-    col_widths = [45 * mm, 20 * mm, 22 * mm, 16 * mm, 18 * mm, 18 * mm, 22 * mm]
+    col_widths = [
+        30 * mm,  # 廣告名稱
+        15 * mm,  # 帳戶
+        16 * mm,  # 花費
+        12 * mm,  # 購買
+        13 * mm,  # ROAS
+        13 * mm,  # CPA
+        16 * mm,  # 曝光
+        14 * mm,  # 觸及
+        13 * mm,  # 點擊
+        12 * mm,  # CTR%
+        13 * mm,  # CPM
+        16 * mm,  # 判定
+    ]
     table = Table(wrapped, colWidths=col_widths)
 
     style_commands = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495E")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("ALIGN", (2, 1), (5, -1), "RIGHT"),
+        ("ALIGN", (2, 1), (10, -1), "RIGHT"),
         ("FONTNAME", (0, 0), (-1, -1), _CJK_FONT),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F9FA")]),
     ]
@@ -160,12 +191,81 @@ def _ads_table(
     return table
 
 
+def _page_posts_table(
+    page_posts: dict[str, list[dict[str, Any]]],
+    styles: dict,
+    max_posts: int = 5,
+) -> list:
+    """產生粉專貼文 insights 表格，回傳 story 元素列表。"""
+    elements = []
+    if not page_posts:
+        return elements
+
+    for source_name, posts in page_posts.items():
+        if not posts:
+            continue
+
+        elements.append(Paragraph(f"📄 {source_name}", styles["heading"]))
+
+        header = ["日期", "貼文內容", "觸及", "曝光", "點擊", "互動", "按讚", "留言", "分享"]
+        data = [header]
+
+        for post in posts[:max_posts]:
+            message = str(post.get("message") or "").replace("\n", " ")[:30]
+            created = post.get("created_time", "")[:10]
+            data.append([
+                created,
+                message or "(無文字)",
+                f"{post.get('post_impressions_unique', 0):,}",
+                f"{post.get('post_impressions', 0):,}",
+                f"{post.get('post_clicks', 0):,}",
+                f"{post.get('post_engaged_users', 0):,}",
+                f"{post.get('likes_count', 0):,}",
+                f"{post.get('comments_count', 0):,}",
+                f"{post.get('shares_count', 0):,}",
+            ])
+
+        wrapped = []
+        for row in data:
+            wrapped.append([Paragraph(str(cell), styles["tiny"]) for cell in row])
+
+        col_widths = [
+            18 * mm,  # 日期
+            35 * mm,  # 貼文內容
+            16 * mm,  # 觸及
+            16 * mm,  # 曝光
+            14 * mm,  # 點擊
+            14 * mm,  # 互動
+            14 * mm,  # 按讚
+            14 * mm,  # 留言
+            14 * mm,  # 分享
+        ]
+        table = Table(wrapped, colWidths=col_widths)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A5276")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+            ("FONTNAME", (0, 0), (-1, -1), _CJK_FONT),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F0F8FF")]),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 6 * mm))
+
+    return elements
+
+
 def generate_pdf_report(
     summary: dict[str, Any],
     ai_summary_text: str | None,
     start_date: str,
     end_date: str,
     output_path: str = "weekly_report.pdf",
+    page_posts: dict[str, list[dict[str, Any]]] | None = None,
 ) -> str:
     """產生 PDF 週報，回傳檔案路徑。"""
     styles = _styles()
@@ -218,6 +318,14 @@ def generate_pdf_report(
         table = _ads_table(summary["watch_list"], styles, max_rows=15)
         if table:
             story.append(table)
+        story.append(Spacer(1, 6 * mm))
+
+    # ── 粉專貼文 ──
+    if page_posts:
+        story.append(PageBreak())
+        story.append(Paragraph("粉專貼文成效", styles["heading"]))
+        story.append(Spacer(1, 4 * mm))
+        story.extend(_page_posts_table(page_posts, styles))
 
     doc.build(story)
     logger.info(f"PDF 報告已產生: {output_path}")
