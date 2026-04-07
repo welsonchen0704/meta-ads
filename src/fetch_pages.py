@@ -1,5 +1,6 @@
 """
 Meta Page API 粉專貼文拉取模組
+含貼文 insights（觸及、互動、點擊等）。
 """
 from __future__ import annotations
 
@@ -7,11 +8,45 @@ import logging
 from typing import Any
 
 from config import settings
-from utils import http_get
+from utils import http_get, safe_int
 
 logger = logging.getLogger("meta_weekly_report")
 
 META_BASE = f"https://graph.facebook.com/{settings.meta_api_version}"
+
+# 要拉取的貼文 insights 指標
+POST_INSIGHT_METRICS = [
+    "post_impressions",              # 曝光次數
+    "post_impressions_unique",       # 觸及人數
+    "post_engaged_users",            # 互動人數
+    "post_clicks",                   # 貼文點擊次數
+    "post_reactions_like_total",     # 按讚數
+    "post_activity",                 # 所有互動（留言+分享+點擊）
+]
+
+
+def _fetch_post_insights(
+    post_id: str,
+    page_access_token: str,
+) -> dict[str, int]:
+    """拉取單篇貼文的 insights 指標。"""
+    url = f"{META_BASE}/{post_id}/insights"
+    params = {
+        "access_token": page_access_token,
+        "metric": ",".join(POST_INSIGHT_METRICS),
+    }
+    try:
+        payload = http_get(url, params)
+        result: dict[str, int] = {}
+        for item in payload.get("data", []):
+            name = item.get("name", "")
+            values = item.get("values", [])
+            if values:
+                result[name] = safe_int(values[0].get("value", 0))
+        return result
+    except Exception as e:
+        logger.warning(f"拉取貼文 {post_id} insights 失敗: {e}")
+        return {}
 
 
 def fetch_page_posts(
@@ -19,8 +54,13 @@ def fetch_page_posts(
     page_access_token: str,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    """拉取粉專最近的貼文。"""
-    fields = ["id", "message", "created_time", "permalink_url"]
+    """拉取粉專最近的貼文，並附加 insights 數據。"""
+    fields = [
+        "id", "message", "created_time", "permalink_url",
+        "shares",
+        "likes.summary(true)",
+        "comments.summary(true)",
+    ]
     url = f"{META_BASE}/{page_id}/posts"
     params = {
         "access_token": page_access_token,
@@ -30,6 +70,31 @@ def fetch_page_posts(
     payload = http_get(url, params)
     posts = payload.get("data", [])
     logger.info(f"粉專 {page_id} 取得 {len(posts)} 篇貼文")
+
+    # 為每篇貼文拉取 insights
+    for post in posts:
+        post_id = post.get("id", "")
+        if not post_id:
+            continue
+
+        # 從 post 本身取 likes/comments/shares
+        likes_data = post.get("likes", {}).get("summary", {})
+        comments_data = post.get("comments", {}).get("summary", {})
+        shares_data = post.get("shares", {})
+
+        post["likes_count"] = safe_int(likes_data.get("total_count", 0))
+        post["comments_count"] = safe_int(comments_data.get("total_count", 0))
+        post["shares_count"] = safe_int(shares_data.get("count", 0))
+
+        # 從 insights API 取詳細指標
+        insights = _fetch_post_insights(post_id, page_access_token)
+        post["impressions"] = insights.get("post_impressions", 0)
+        post["reach"] = insights.get("post_impressions_unique", 0)
+        post["engaged_users"] = insights.get("post_engaged_users", 0)
+        post["clicks"] = insights.get("post_clicks", 0)
+        post["reactions"] = insights.get("post_reactions_like_total", 0)
+        post["activity"] = insights.get("post_activity", 0)
+
     return posts
 
 
