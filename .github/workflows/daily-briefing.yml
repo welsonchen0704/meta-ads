@@ -1,0 +1,39 @@
+name: Daily Meta Ads Briefing
+
+on:
+  schedule:
+    # 每天台灣時間 09:00 執行（UTC 01:00）
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  daily-briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily briefing
+        env:
+          META_USER_ACCESS_TOKEN: ${{ secrets.META_USER_ACCESS_TOKEN }}
+          META_AD_ACCOUNT_ID_KOCSKIN: ${{ secrets.META_AD_ACCOUNT_ID_KOCSKIN }}
+          META_AD_ACCOUNT_ID_XIAOYAN: ${{ secrets.META_AD_ACCOUNT_ID_XIAOYAN }}
+          NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
+          NOTION_DB_KOCSKIN_DAILY_ADS: ${{ secrets.NOTION_DB_KOCSKIN_DAILY_ADS }}
+          NOTION_DB_CAMPING_DAILY_ADS: ${{ secrets.NOTION_DB_CAMPING_DAILY_ADS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python src/daily_briefing.py

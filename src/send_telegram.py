@@ -1,11 +1,12 @@
 """
 Telegram 通知模組
-支援成功通知和錯誤通知。
+支援週報通知、日報通知與錯誤通知。
 使用 HTML parse_mode 避免 Markdown 特殊字元問題。
 """
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import requests
@@ -91,3 +92,101 @@ def send_token_expiry_warning() -> None:
         _send(text)
     except Exception:
         pass
+
+
+# ── 日報專用通知 ───────────────────────────────────────────
+def _format_daily_briefing(brand: str, eval_result: dict, notion_url: str = "") -> str:
+    """產生日報文字（HTML 格式給 Telegram）。"""
+    summary = eval_result["yesterday_summary"]
+    last_3d_summary = eval_result.get("last_3d_summary", {})
+    last_7d_summary = eval_result.get("last_7d_summary", {})
+    red = eval_result["alerts_red"]
+    green = eval_result["alerts_green"]
+    yellow = eval_result["alerts_yellow"]
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    lines = [
+        f"<b>📊 {brand} 廣告早報 {today_str}</b>",
+        "",
+    ]
+
+    # 紅色警示
+    if red:
+        lines.append(f"🔴 <b>立刻處理 ({len(red)})</b>")
+        for a in red[:5]:  # 最多顯示 5 條
+            lines.append(f"• {a['message']}")
+        if len(red) > 5:
+            lines.append(f"  ...還有 {len(red) - 5} 條")
+        lines.append("")
+
+    # 綠色加碼
+    if green:
+        lines.append(f"🟢 <b>加碼機會 ({len(green)})</b>")
+        for a in green[:5]:
+            lines.append(f"• {a['message']}")
+        if len(green) > 5:
+            lines.append(f"  ...還有 {len(green) - 5} 條")
+        lines.append("")
+
+    # 黃色觀察
+    if yellow:
+        lines.append(f"🟡 <b>注意觀察 ({len(yellow)})</b>")
+        for a in yellow[:3]:
+            lines.append(f"• {a['message']}")
+        if len(yellow) > 3:
+            lines.append(f"  ...還有 {len(yellow) - 3} 條")
+        lines.append("")
+
+    # 沒事的話顯示「今天平靜」
+    if not red and not green and not yellow:
+        lines.append("✅ 今日無警示，整體運作正常")
+        lines.append("")
+
+    # 昨日總結
+    lines.extend([
+        "<b>📈 昨日總結</b>",
+        f"花費：NT${summary.get('spend', 0):,.0f}",
+        f"購買：{summary.get('purchases', 0)} 筆",
+        f"營收：NT${summary.get('purchase_value', 0):,.0f}",
+        f"ROAS：{summary.get('roas', 0):.2f}x  |  CPA：NT${summary.get('cpa', 0):,.0f}",
+        f"廣告組數：{summary.get('ad_count', 0)}",
+        "",
+    ])
+
+    # 7 天趨勢
+    if last_7d_summary.get("ad_count", 0) > 0:
+        roas_3d = last_3d_summary.get("roas", 0)
+        roas_7d = last_7d_summary.get("roas", 0)
+        roas_arrow = "↑" if roas_3d > roas_7d else ("↓" if roas_3d < roas_7d else "→")
+        lines.extend([
+            "<b>📊 趨勢（過去 3 天 vs 7 天）</b>",
+            f"ROAS：{roas_3d:.2f} vs {roas_7d:.2f} {roas_arrow}",
+            f"CPA：NT${last_3d_summary.get('cpa', 0):,.0f} vs NT${last_7d_summary.get('cpa', 0):,.0f}",
+            "",
+        ])
+
+    if notion_url:
+        lines.append(f"📎 完整資料：{notion_url}")
+
+    return "\n".join(lines)
+
+
+def send_daily_briefing(brand: str, eval_result: dict, notion_url: str = "") -> None:
+    """發送單一品牌的每日早報。"""
+    text = _format_daily_briefing(brand, eval_result, notion_url)
+    try:
+        _send(text)
+        logger.info(f"  ✓ {brand} 日報已發送")
+    except Exception as e:
+        logger.error(f"  ✗ {brand} 日報發送失敗：{e}")
+        # 發失敗也要記住內容，方便後續排錯
+        logger.error(f"  訊息內容：\n{text}")
+
+
+def get_daily_briefing_text(brand: str, eval_result: dict, notion_url: str = "") -> str:
+    """供其他模組（例如寫 Notion）取得純文字早報。"""
+    text = _format_daily_briefing(brand, eval_result, notion_url)
+    # 去掉 HTML tag 給 Notion 用
+    import re
+    return re.sub(r"<[^>]+>", "", text)

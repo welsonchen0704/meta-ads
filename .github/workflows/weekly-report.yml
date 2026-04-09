@@ -1,8 +1,8 @@
 name: Weekly Meta Ads Report
 
+# 註：自動排程已停用（改用 daily-briefing.yml）
+# 仍保留 workflow_dispatch 以便手動產生週報
 on:
-  schedule:
-    - cron: '0 1 * * 1'
   workflow_dispatch:
 
 permissions:
