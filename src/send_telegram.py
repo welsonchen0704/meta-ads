@@ -5,6 +5,7 @@ Telegram 通知模組
 """
 from __future__ import annotations
 
+import html
 import logging
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,11 @@ from typing import Any
 import requests
 
 from config import settings
+
+
+def _esc(text: str) -> str:
+    """HTML 跳脫，避免廣告名稱中的 & < > 把 Telegram 訊息搞壞。"""
+    return html.escape(str(text), quote=False)
 
 logger = logging.getLogger("meta_weekly_report")
 
@@ -115,7 +121,7 @@ def _format_daily_briefing(brand: str, eval_result: dict, notion_url: str = "") 
     if red:
         lines.append(f"🔴 <b>立刻處理 ({len(red)})</b>")
         for a in red[:5]:  # 最多顯示 5 條
-            lines.append(f"• {a['message']}")
+            lines.append(f"• {_esc(a['message'])}")
         if len(red) > 5:
             lines.append(f"  ...還有 {len(red) - 5} 條")
         lines.append("")
@@ -124,7 +130,7 @@ def _format_daily_briefing(brand: str, eval_result: dict, notion_url: str = "") 
     if green:
         lines.append(f"🟢 <b>加碼機會 ({len(green)})</b>")
         for a in green[:5]:
-            lines.append(f"• {a['message']}")
+            lines.append(f"• {_esc(a['message'])}")
         if len(green) > 5:
             lines.append(f"  ...還有 {len(green) - 5} 條")
         lines.append("")
@@ -133,7 +139,7 @@ def _format_daily_briefing(brand: str, eval_result: dict, notion_url: str = "") 
     if yellow:
         lines.append(f"🟡 <b>注意觀察 ({len(yellow)})</b>")
         for a in yellow[:3]:
-            lines.append(f"• {a['message']}")
+            lines.append(f"• {_esc(a['message'])}")
         if len(yellow) > 3:
             lines.append(f"  ...還有 {len(yellow) - 3} 條")
         lines.append("")
