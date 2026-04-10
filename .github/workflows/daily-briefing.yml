@@ -2,8 +2,9 @@ name: Daily Meta Ads Briefing
 
 on:
   schedule:
-    # 每天台灣時間 09:00 執行（UTC 01:00）
-    - cron: '0 1 * * *'
+    # 每天台灣時間 09:07 執行（UTC 01:07）
+    # 刻意避開整點以降低 GitHub Actions 高峰延遲與 skip 風險
+    - cron: '7 1 * * *'
   workflow_dispatch:
 
 jobs:
