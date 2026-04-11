@@ -3,4 +3,4 @@ builder = "nixpacks"
 
 [deploy]
 # 每天 09:07 台灣時間（UTC 01:07）
-cronSchedule = "7 1 * * *"
+cronSchedule = "1 1 * * *"
